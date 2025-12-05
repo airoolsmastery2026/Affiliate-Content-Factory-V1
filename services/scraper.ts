@@ -1,3 +1,4 @@
+
 import { YoutubeTranscript } from 'youtube-transcript';
 import * as cheerio from 'cheerio';
 
@@ -14,42 +15,62 @@ export const scrapeContent = async (url: string): Promise<string> => {
         }
         return transcript.map(t => t.text).join(' ');
       } catch (ytError: any) {
-        console.warn("YouTube transcript fetch failed:", ytError);
-        throw new Error("Could not fetch YouTube transcript. The video might not have captions or is restricted.");
+        console.warn("YouTube transcript fetch failed, falling back to metadata:", ytError.message);
+        
+        // Fallback: Fetch Title and Description if transcript fails
+        const response = await fetch(url, {
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+          }
+        });
+        const html = await response.text();
+        const $ = cheerio.load(html);
+        const title = $('meta[name="title"]').attr('content') || $('title').text();
+        const description = $('meta[name="description"]').attr('content') || '';
+        
+        if (!title && !description) {
+           throw new Error("Could not fetch YouTube metadata.");
+        }
+
+        return `[TRANSCRIPT UNAVAILABLE] Analysis based on metadata:\n\nTitle: ${title}\nDescription: ${description}`;
       }
     }
 
     // 2. General Website Handling
-    // Note: This often hits CORS limits in client-side browsers. 
-    // In a real production app, this should be done via a backend proxy.
-    const response = await fetch(url);
+    const response = await fetch(url, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+        'Accept-Language': 'en-US,en;q=0.5'
+      }
+    });
+
     if (!response.ok) {
-      throw new Error(`Failed to fetch URL: ${response.statusText}`);
+      throw new Error(`Failed to fetch URL: ${response.status} ${response.statusText}`);
     }
     
     const html = await response.text();
     const $ = cheerio.load(html);
 
-    // Cleanup: Remove scripts, styles, navs, footers to extract meaningful text
-    $('script, style, nav, footer, header, noscript, iframe').remove();
+    // Cleanup: Remove scripts, styles, navs, footers, ads
+    $('script, style, nav, footer, header, noscript, iframe, svg, button, input, form').remove();
     
     // Attempt to find the main article content
-    let content = $('article').text() || $('main').text() || $('body').text();
+    let content = $('article').text() || $('main').text() || $('div.content').text() || $('body').text();
     
     // Clean up whitespace
     content = content.replace(/\s+/g, ' ').trim();
     
     if (content.length < 50) {
-      throw new Error("Could not extract enough text from this URL.");
+      throw new Error("Could not extract meaningful text from this URL. It might be protected or empty.");
     }
 
-    return content.slice(0, 15000); // Limit to ~15k chars for token limits
+    return content.slice(0, 15000); // Limit to ~15k chars for token efficiency
 
   } catch (error: any) {
     console.error("Scraping Error:", error);
-    // Provide a user-friendly error message regarding browser limitations
-    if (error.message.includes('Failed to fetch') || error.message.includes('NetworkError')) {
-      throw new Error("Browser Security (CORS) blocked the request. Please copy/paste the text manually.");
+    if (error.message.includes('fetch') || error.message.includes('Network')) {
+      throw new Error("Server could not access this URL (Network/CORS error). Please paste the text manually.");
     }
     throw error;
   }

@@ -7,9 +7,14 @@ export const generateScripts = async (
   niche: string,
   platforms: Platform[],
   tone: string,
-  videoSettings: VideoSettings
+  videoSettings: VideoSettings,
+  apiKey?: string // Optional: Allow client provided key
 ): Promise<GeneratedResult> => {
-  if (!process.env.OPENAI_API_KEY) throw new Error("OpenAI API Key is missing.");
+  
+  // Logic: Use provided key -> Fallback to Env -> Error
+  const keyToUse = apiKey || process.env.OPENAI_API_KEY;
+
+  if (!keyToUse) throw new Error("OpenAI API Key is missing. Please set it in Settings or .env");
 
   const prompt = OPENAI_GENERATE_PROMPT_TEMPLATE
     .replace('{{NICHE}}', niche)
@@ -26,16 +31,16 @@ export const generateScripts = async (
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`
+        'Authorization': `Bearer ${keyToUse}`
       },
       body: JSON.stringify({
-        model: "gpt-4o", // Strongest model for creative writing
+        model: "gpt-4o", // Strong model for creative writing
         messages: [
           { role: "system", content: "You are an expert viral content creator and scriptwriter." },
           { role: "user", content: prompt }
         ],
         response_format: { type: "json_object" },
-        temperature: 0.8
+        temperature: 0.8 // Higher temperature for creativity
       })
     });
 

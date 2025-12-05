@@ -12,7 +12,6 @@ export interface VideoSettings {
   contentFocus: string;
 }
 
-// Sub-interfaces for Analysis
 export interface StructureAnalysis {
   format_type: string;
   hook_analysis: string;
@@ -42,7 +41,6 @@ export interface AnalysisResult {
   ideas: ContentIdea[];
 }
 
-// Sub-interfaces for Generation
 export interface VisualIdea {
   thumbnail_description: string;
   ai_image_prompt: string;
@@ -67,7 +65,6 @@ export interface GeneratedResult {
   platform_contents: PlatformContent[];
 }
 
-// Combined Result for Frontend
 export interface ContentJobResult {
   analysis: AnalysisResult;
   generated: GeneratedResult;
@@ -79,6 +76,8 @@ export interface AppState {
   rawText: string;
   niche: string;
   tone: string;
+  geminiApiKey: string; // Added field
+  openaiApiKey: string; // Added field
   selectedPlatforms: Platform[];
   videoSettings: VideoSettings;
   isAnalyzing: boolean;

@@ -1,5 +1,6 @@
+
 import React, { useState, useCallback } from 'react';
-import { Platform, AppState, VideoSettings } from './types';
+import { Platform, AppState } from './types';
 import InputSection from './components/InputSection';
 import AnalysisResultView from './components/AnalysisResult';
 import ScriptResultView from './components/ScriptResult';
@@ -11,6 +12,8 @@ const App: React.FC = () => {
     rawText: '',
     niche: '',
     tone: 'Professional',
+    geminiApiKey: '',
+    openaiApiKey: '',
     selectedPlatforms: [],
     videoSettings: {
       aspectRatio: '9:16',
@@ -47,7 +50,7 @@ const App: React.FC = () => {
     setState((prev) => ({ ...prev, isAnalyzing: true, error: null, analysis: null, scripts: [] }));
 
     try {
-      // Call the Next.js API Route
+      // Call the Next.js API Route with all state including keys
       const response = await fetch('/api/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -58,29 +61,27 @@ const App: React.FC = () => {
           niche: state.niche,
           tone: state.tone,
           platforms: state.selectedPlatforms,
-          videoSettings: state.videoSettings, // Pass technical settings
+          videoSettings: state.videoSettings,
+          geminiApiKey: state.geminiApiKey, // Send custom key if set
+          openaiApiKey: state.openaiApiKey  // Send custom key if set
         }),
       });
 
       const data = await response.json();
 
       if (!response.ok) {
-        throw new Error(data.message || 'Failed to generate content. Please check inputs or API keys.');
+        throw new Error(data.error || data.message || 'Failed to generate content. Please check inputs or API keys.');
       }
 
-      // Map the API response format to our App state format
-      // API returns { analysis: ..., generated: { platform_contents: [...] } }
       const analysisData = data.analysis;
-      
-      // Transform generated content to match PlatformResult[]
       const generatedScripts = data.generated.platform_contents.map((pc: any) => ({
         platform: pc.platform,
-        variants: pc.items // pc.items matches the ScriptVariant structure mostly
+        variants: pc.items
       }));
 
       setState((prev) => ({
         ...prev,
-        isAnalyzing: false, // API returns everything at once now
+        isAnalyzing: false,
         isGenerating: false,
         analysis: analysisData,
         scripts: generatedScripts
@@ -95,10 +96,10 @@ const App: React.FC = () => {
         error: err.message || "An unexpected error occurred.",
       }));
     }
-  }, [state.inputMode, state.url, state.rawText, state.niche, state.selectedPlatforms, state.tone, state.videoSettings]);
+  }, [state]);
 
   return (
-    <div className="min-h-screen pb-20">
+    <div className="min-h-screen pb-20 bg-gray-900 text-gray-100">
       {/* Header */}
       <header className="bg-gray-900 border-b border-gray-800 sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
@@ -108,14 +109,11 @@ const App: React.FC = () => {
             </div>
             <h1 className="text-xl font-bold text-gray-100">Affiliate Content Factory</h1>
           </div>
-          <div className="text-xs text-gray-500 hidden sm:block">
-             Powered by <span className="text-blue-400 font-semibold">Gemini 2.5</span> & <span className="text-green-400 font-semibold">OpenAI</span>
-          </div>
         </div>
       </header>
 
       {/* Main Content */}
-      <main className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <main className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         
         {/* Error Notification */}
         {state.error && (
@@ -135,6 +133,8 @@ const App: React.FC = () => {
                 url={state.url}
                 rawText={state.rawText}
                 niche={state.niche}
+                geminiApiKey={state.geminiApiKey}
+                openaiApiKey={state.openaiApiKey}
                 selectedPlatforms={state.selectedPlatforms}
                 videoSettings={state.videoSettings}
                 isLoading={state.isAnalyzing || state.isGenerating}
@@ -142,6 +142,7 @@ const App: React.FC = () => {
                 onUrlChange={(val) => setState(prev => ({ ...prev, url: val }))}
                 onRawTextChange={(val) => setState(prev => ({ ...prev, rawText: val }))}
                 onNicheChange={(val) => setState(prev => ({ ...prev, niche: val }))}
+                onKeysChange={(gemini, openai) => setState(prev => ({ ...prev, geminiApiKey: gemini, openaiApiKey: openai }))}
                 onPlatformToggle={handlePlatformToggle}
                 onVideoSettingsChange={(settings) => setState(prev => ({ ...prev, videoSettings: settings }))}
                 onGenerate={handleGenerate}
@@ -150,34 +151,24 @@ const App: React.FC = () => {
 
           {/* Results Column */}
           <div className="lg:col-span-8 space-y-8">
-            {/* Initial State / Placeholder */}
             {!state.analysis && !state.isAnalyzing && !state.error && (
               <div className="h-full flex flex-col items-center justify-center text-center p-12 border-2 border-dashed border-gray-800 rounded-xl text-gray-500 min-h-[400px]">
-                <svg className="w-16 h-16 mb-4 text-gray-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19.428 15.428a2 2 0 00-1.022-.547l-2.384-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z" />
-                </svg>
-                <h3 className="text-lg font-medium text-gray-400">Content Engine Ready</h3>
-                <p className="max-w-sm mt-2">Paste a competitor URL or text to generate viral affiliate scripts and visual prompts.</p>
+                <h3 className="text-lg font-medium text-gray-400">Ready to Generate</h3>
+                <p className="max-w-sm mt-2">Configure your keys (optional) and paste content to start.</p>
               </div>
             )}
 
-            {/* Analysis Loading */}
             {state.isAnalyzing && (
               <div className="animate-pulse space-y-4">
                 <div className="h-4 bg-gray-800 rounded w-3/4"></div>
-                <div className="h-32 bg-gray-800 rounded"></div>
-                <div className="h-4 bg-gray-800 rounded w-1/2"></div>
                 <div className="text-center text-blue-400 font-mono text-sm mt-6 p-4 bg-blue-900/20 rounded-lg border border-blue-900/50">
-                  <p className="font-bold mb-1">Processing...</p>
-                  <p className="text-xs text-blue-300">Scraping Content → Deep Psychology Analysis → Generating Scripts</p>
+                  Running Content Engine...
                 </div>
               </div>
             )}
 
-            {/* Analysis Results */}
             {state.analysis && <AnalysisResultView data={state.analysis} />}
 
-            {/* Script Results */}
             <div className="space-y-8">
               {state.scripts.map((scriptData) => (
                 <ScriptResultView key={scriptData.platform} result={scriptData} />

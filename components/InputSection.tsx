@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { Platform, VideoSettings } from '../types';
 
@@ -6,6 +7,8 @@ interface InputSectionProps {
   url: string;
   rawText: string;
   niche: string;
+  geminiApiKey: string;
+  openaiApiKey: string;
   selectedPlatforms: Platform[];
   videoSettings: VideoSettings;
   isLoading: boolean;
@@ -13,6 +16,7 @@ interface InputSectionProps {
   onUrlChange: (val: string) => void;
   onRawTextChange: (val: string) => void;
   onNicheChange: (val: string) => void;
+  onKeysChange: (gemini: string, openai: string) => void;
   onPlatformToggle: (platform: Platform) => void;
   onVideoSettingsChange: (settings: VideoSettings) => void;
   onGenerate: () => void;
@@ -23,6 +27,8 @@ const InputSection: React.FC<InputSectionProps> = ({
   url,
   rawText,
   niche,
+  geminiApiKey,
+  openaiApiKey,
   selectedPlatforms,
   videoSettings,
   isLoading,
@@ -30,223 +36,123 @@ const InputSection: React.FC<InputSectionProps> = ({
   onUrlChange,
   onRawTextChange,
   onNicheChange,
+  onKeysChange,
   onPlatformToggle,
   onVideoSettingsChange,
   onGenerate,
 }) => {
+  const [showSettings, setShowSettings] = useState(false);
   const platforms = Object.values(Platform);
   
-  // Validation logic
-  const isUrlValid = inputMode === 'url' && url.length > 5;
-  const isTextValid = inputMode === 'text' && rawText.length > 10;
-  const isSourceReady = isUrlValid || isTextValid;
+  const isSourceReady = (inputMode === 'url' && url.length > 5) || (inputMode === 'text' && rawText.length > 10);
   const isReady = isSourceReady && niche.length > 2 && selectedPlatforms.length > 0;
 
   const handleSettingChange = (key: keyof VideoSettings, value: string) => {
-    onVideoSettingsChange({
-      ...videoSettings,
-      [key]: value
-    });
+    onVideoSettingsChange({ ...videoSettings, [key]: value });
   };
 
   return (
     <div className="space-y-6 bg-gray-800 p-6 rounded-xl border border-gray-700 shadow-xl">
       
+      {/* API Key Configuration Toggle */}
+      <div className="flex justify-end">
+        <button 
+          onClick={() => setShowSettings(!showSettings)}
+          className="text-xs text-blue-400 hover:text-blue-300 underline flex items-center"
+        >
+          {showSettings ? 'Hide API Settings' : '⚙️ Configure Custom API Keys'}
+        </button>
+      </div>
+
+      {showSettings && (
+        <div className="bg-gray-900 p-4 rounded-lg border border-gray-700 space-y-4 animate-fade-in-down">
+          <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider">Custom API Keys (Optional)</h3>
+          <p className="text-[10px] text-gray-500">If provided, these keys will be used instead of the server defaults.</p>
+          
+          <div>
+            <label className="block text-xs text-gray-400 mb-1">Gemini API Key</label>
+            <input 
+              type="password" 
+              value={geminiApiKey} 
+              onChange={(e) => onKeysChange(e.target.value, openaiApiKey)}
+              placeholder="AIzaSy..."
+              className="w-full p-2 bg-gray-800 border border-gray-600 rounded text-xs text-white focus:border-blue-500"
+            />
+          </div>
+          <div>
+            <label className="block text-xs text-gray-400 mb-1">OpenAI API Key</label>
+            <input 
+              type="password" 
+              value={openaiApiKey} 
+              onChange={(e) => onKeysChange(geminiApiKey, e.target.value)}
+              placeholder="sk-..."
+              className="w-full p-2 bg-gray-800 border border-gray-600 rounded text-xs text-white focus:border-green-500"
+            />
+          </div>
+        </div>
+      )}
+
       {/* 1. Source Input */}
       <div>
-        <label className="block text-sm font-medium text-gray-300 mb-2">
-          1. Competitor Source
-        </label>
-        
-        {/* Toggle Switches */}
+        <label className="block text-sm font-medium text-gray-300 mb-2">1. Competitor Source</label>
         <div className="flex bg-gray-900 p-1 rounded-lg mb-3">
-          <button
-            onClick={() => onInputModeChange('url')}
-            className={`flex-1 py-2 text-sm font-medium rounded-md transition-all ${
-              inputMode === 'url' 
-                ? 'bg-blue-600 text-white shadow-lg' 
-                : 'text-gray-400 hover:text-gray-200'
-            }`}
-          >
-            Paste Link 🔗
-          </button>
-          <button
-            onClick={() => onInputModeChange('text')}
-            className={`flex-1 py-2 text-sm font-medium rounded-md transition-all ${
-              inputMode === 'text' 
-                ? 'bg-blue-600 text-white shadow-lg' 
-                : 'text-gray-400 hover:text-gray-200'
-            }`}
-          >
-            Paste Text 📝
-          </button>
+          <button onClick={() => onInputModeChange('url')} className={`flex-1 py-2 text-sm font-medium rounded-md transition-all ${inputMode === 'url' ? 'bg-blue-600 text-white shadow-lg' : 'text-gray-400 hover:text-gray-200'}`}>Paste Link 🔗</button>
+          <button onClick={() => onInputModeChange('text')} className={`flex-1 py-2 text-sm font-medium rounded-md transition-all ${inputMode === 'text' ? 'bg-blue-600 text-white shadow-lg' : 'text-gray-400 hover:text-gray-200'}`}>Paste Text 📝</button>
         </div>
-
         {inputMode === 'url' ? (
           <div>
-            <input
-              type="url"
-              disabled={isLoading}
-              value={url}
-              onChange={(e) => onUrlChange(e.target.value)}
-              placeholder="https://youtube.com/watch?v=..."
-              className="w-full p-3 bg-gray-900 border border-gray-700 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-100 placeholder-gray-500 transition-all"
-            />
-            <p className="text-xs text-gray-500 mt-2 ml-1">
-              Supports YouTube Videos and generic blog posts. <br/>
-              <span className="text-yellow-600">Note: If fetching fails due to browser security, try pasting text.</span>
-            </p>
+            <input type="url" disabled={isLoading} value={url} onChange={(e) => onUrlChange(e.target.value)} placeholder="https://youtube.com/watch?v=..." className="w-full p-3 bg-gray-900 border border-gray-700 rounded-lg text-gray-100" />
+            <p className="text-xs text-gray-500 mt-2">Supports YouTube & Blogs. <span className="text-yellow-600">Try text paste if link fails.</span></p>
           </div>
         ) : (
-          <textarea
-            disabled={isLoading}
-            value={rawText}
-            onChange={(e) => onRawTextChange(e.target.value)}
-            placeholder="Paste transcript or article text here..."
-            className="w-full h-40 p-3 bg-gray-900 border border-gray-700 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-100 placeholder-gray-500 resize-none transition-all"
-          />
+          <textarea disabled={isLoading} value={rawText} onChange={(e) => onRawTextChange(e.target.value)} placeholder="Paste transcript here..." className="w-full h-32 p-3 bg-gray-900 border border-gray-700 rounded-lg text-gray-100" />
         )}
       </div>
 
-      {/* 2. Niche Input */}
+      {/* 2. Niche */}
       <div>
-        <label className="block text-sm font-medium text-gray-300 mb-2">
-          2. Your Niche
-        </label>
-        <input
-          type="text"
-          disabled={isLoading}
-          value={niche}
-          onChange={(e) => onNicheChange(e.target.value)}
-          placeholder="e.g., Digital Marketing, Keto Diet, Pet Care..."
-          className="w-full p-3 bg-gray-900 border border-gray-700 rounded-lg focus:ring-2 focus:ring-blue-500 text-gray-100"
-        />
+        <label className="block text-sm font-medium text-gray-300 mb-2">2. Niche</label>
+        <input type="text" disabled={isLoading} value={niche} onChange={(e) => onNicheChange(e.target.value)} placeholder="e.g., AI Tools, Weight Loss..." className="w-full p-3 bg-gray-900 border border-gray-700 rounded-lg text-gray-100" />
       </div>
 
       {/* 3. Platforms */}
       <div>
-        <label className="block text-sm font-medium text-gray-300 mb-3">
-          3. Target Platforms
-        </label>
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-          {platforms.map((p) => {
-            const isSelected = selectedPlatforms.includes(p);
-            return (
-              <button
-                key={p}
-                onClick={() => !isLoading && onPlatformToggle(p)}
-                className={`flex items-center justify-center px-4 py-3 rounded-lg border transition-all duration-200 ${
-                  isSelected
-                    ? 'bg-blue-600 border-blue-500 text-white shadow-lg shadow-blue-500/20'
-                    : 'bg-gray-900 border-gray-700 text-gray-400 hover:border-gray-500'
-                } ${isLoading ? 'opacity-50 cursor-not-allowed' : ''}`}
-              >
-                <span className="font-medium text-xs sm:text-sm">{p}</span>
-                {isSelected && (
-                  <svg className="w-4 h-4 ml-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                  </svg>
-                )}
-              </button>
-            );
-          })}
+        <label className="block text-sm font-medium text-gray-300 mb-3">3. Platforms</label>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+          {platforms.map((p) => (
+            <button key={p} onClick={() => !isLoading && onPlatformToggle(p)} className={`px-2 py-3 rounded-lg border text-xs font-medium ${selectedPlatforms.includes(p) ? 'bg-blue-600 border-blue-500 text-white' : 'bg-gray-900 border-gray-700 text-gray-400'}`}>{p}</button>
+          ))}
         </div>
       </div>
 
-      {/* 4. Video Configuration (Advanced Settings) */}
+      {/* 4. Tech Specs */}
       <div className="bg-gray-900/50 p-4 rounded-xl border border-gray-700">
-        <label className="block text-sm font-medium text-blue-400 mb-4 uppercase tracking-wide flex items-center">
-          <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" />
-          </svg>
-          4. Video Technical Specs
-        </label>
-        
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {/* Aspect Ratio */}
+        <label className="block text-sm font-medium text-blue-400 mb-4 uppercase tracking-wide">4. Video Specs</label>
+        <div className="grid grid-cols-2 gap-4">
           <div>
-            <label className="block text-xs text-gray-400 mb-1">Tỷ lệ khung hình</label>
-            <select
-              value={videoSettings.aspectRatio}
-              onChange={(e) => handleSettingChange('aspectRatio', e.target.value)}
-              className="w-full p-2 bg-gray-800 border border-gray-600 rounded text-sm text-gray-200 focus:border-blue-500"
-            >
-              <option value="9:16">9:16 (TikTok/Reels/Shorts)</option>
-              <option value="16:9">16:9 (YouTube Landscape)</option>
-              <option value="1:1">1:1 (Facebook/Insta Post)</option>
-              <option value="4:5">4:5 (Facebook/Insta Portrait)</option>
+            <label className="block text-xs text-gray-400 mb-1">Aspect Ratio</label>
+            <select value={videoSettings.aspectRatio} onChange={(e) => handleSettingChange('aspectRatio', e.target.value)} className="w-full p-2 bg-gray-800 border border-gray-600 rounded text-sm text-gray-200">
+              <option value="9:16">9:16 (TikTok/Shorts)</option>
+              <option value="16:9">16:9 (YouTube)</option>
+              <option value="1:1">1:1 (FB Post)</option>
             </select>
           </div>
-
-          {/* Duration */}
           <div>
-            <label className="block text-xs text-gray-400 mb-1">Độ dài video</label>
-            <select
-              value={videoSettings.duration}
-              onChange={(e) => handleSettingChange('duration', e.target.value)}
-              className="w-full p-2 bg-gray-800 border border-gray-600 rounded text-sm text-gray-200 focus:border-blue-500"
-            >
-              <option value="short">Ngắn (15s - 30s) - Tiết tấu nhanh</option>
-              <option value="medium">Trung bình (30s - 60s) - Tiêu chuẩn</option>
-              <option value="long">Dài (60s - 90s) - Chi tiết</option>
+            <label className="block text-xs text-gray-400 mb-1">Visual Style</label>
+            <select value={videoSettings.visualStyle} onChange={(e) => handleSettingChange('visualStyle', e.target.value)} className="w-full p-2 bg-gray-800 border border-gray-600 rounded text-sm text-gray-200">
+              <option value="Cinematic">Cinematic</option>
+              <option value="UGC">UGC (Phone)</option>
+              <option value="Animated">Animated</option>
+              <option value="Minimalist">Minimalist</option>
             </select>
-          </div>
-
-          {/* Visual Style */}
-          <div>
-            <label className="block text-xs text-gray-400 mb-1">Phong cách Visual</label>
-            <select
-              value={videoSettings.visualStyle}
-              onChange={(e) => handleSettingChange('visualStyle', e.target.value)}
-              className="w-full p-2 bg-gray-800 border border-gray-600 rounded text-sm text-gray-200 focus:border-blue-500"
-            >
-              <option value="Cinematic">Điện ảnh (Cinematic)</option>
-              <option value="UGC">UGC (Tự nhiên, quay bằng điện thoại)</option>
-              <option value="Minimalist">Tối giản (Minimalist)</option>
-              <option value="Animated">Hoạt hình / Minh hoạ (Animated)</option>
-              <option value="Corporate">Chuyên nghiệp / Doanh nghiệp</option>
-              <option value="Cyberpunk">Công nghệ cao / Neon (Cyberpunk)</option>
-            </select>
-          </div>
-
-          {/* Content Focus */}
-          <div>
-            <label className="block text-xs text-gray-400 mb-1">Trọng tâm nội dung (Focus)</label>
-            <input
-              type="text"
-              value={videoSettings.contentFocus}
-              onChange={(e) => handleSettingChange('contentFocus', e.target.value)}
-              placeholder="VD: Giáo dục, Giải trí, Review..."
-              className="w-full p-2 bg-gray-800 border border-gray-600 rounded text-sm text-gray-200 focus:border-blue-500"
-            />
           </div>
         </div>
       </div>
 
-      {/* Generate Button */}
-      <div className="sticky bottom-4 z-10">
-        <button
-          onClick={onGenerate}
-          disabled={!isReady || isLoading}
-          className={`w-full py-4 px-6 rounded-lg font-bold text-lg shadow-xl transition-all transform duration-200 flex items-center justify-center ${
-            isReady && !isLoading
-              ? 'bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-500 hover:to-purple-500 text-white hover:scale-[1.01]'
-              : 'bg-gray-700 text-gray-400 cursor-not-allowed'
-          }`}
-        >
-          {isLoading ? (
-            <>
-              <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-              </svg>
-              Generating Assets...
-            </>
-          ) : (
-            'Generate Content'
-          )}
-        </button>
-      </div>
+      {/* Generate */}
+      <button onClick={onGenerate} disabled={!isReady || isLoading} className={`w-full py-4 rounded-lg font-bold text-lg shadow-xl transition-all ${isReady && !isLoading ? 'bg-gradient-to-r from-blue-600 to-purple-600 hover:scale-[1.01] text-white' : 'bg-gray-700 text-gray-400 cursor-not-allowed'}`}>
+        {isLoading ? 'Generating...' : 'Generate Content 🚀'}
+      </button>
     </div>
   );
 };
