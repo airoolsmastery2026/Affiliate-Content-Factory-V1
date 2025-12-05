@@ -4,7 +4,8 @@ import { AnalysisResult } from "../types";
 import { GEMINI_ANALYZE_PROMPT_TEMPLATE } from "../lib/prompts";
 
 export const analyzeContent = async (rawText: string, niche: string): Promise<AnalysisResult> => {
-  if (!process.env.API_KEY) throw new Error("API Key is missing.");
+  // STRICT RULE: Use process.env.API_KEY for Gemini/Google GenAI
+  if (!process.env.API_KEY) throw new Error("Google API Key (process.env.API_KEY) is missing.");
 
   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
   const model = "gemini-2.5-flash";
@@ -19,14 +20,14 @@ export const analyzeContent = async (rawText: string, niche: string): Promise<An
       contents: prompt,
       config: {
         responseMimeType: "application/json",
-        temperature: 0.3,
+        temperature: 0.3, // Lower temperature for more analytical/structured output
       },
     });
 
     const text = response.text;
     if (!text) throw new Error("Gemini returned empty response.");
 
-    // Clean markdown if present (though responseMimeType should handle it)
+    // Clean markdown code blocks if present (e.g. ```json ... ```)
     const cleanedText = text.replace(/^```json\s*/, '').replace(/\s*```$/, '');
     
     return JSON.parse(cleanedText) as AnalysisResult;
