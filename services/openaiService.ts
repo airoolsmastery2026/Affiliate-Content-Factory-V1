@@ -53,9 +53,17 @@ export const generateScripts = async (
     const content = data.choices?.[0]?.message?.content;
     if (!content) throw new Error("OpenAI returned empty content.");
 
-    return JSON.parse(content) as GeneratedResult;
+    try {
+      return JSON.parse(content) as GeneratedResult;
+    } catch (parseError) {
+      // Attach raw text to error for debugging in API response
+      const error = new Error("OpenAI JSON Parsing Failed");
+      (error as any).detail = content;
+      throw error;
+    }
   } catch (error: any) {
     console.error("OpenAI Generation Error:", error);
+    if (error.message === "OpenAI JSON Parsing Failed") throw error;
     throw new Error(`Script Generation Failed: ${error.message}`);
   }
 };

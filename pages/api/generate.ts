@@ -93,10 +93,15 @@ export default async function handler(
 
   } catch (error: any) {
     console.error('API Orchestration Error:', error);
-    const msg = error.message || 'Internal Server Error';
+    
+    // Check if the error object has a 'detail' property (set by our services for parsing errors)
+    // If not, use the string representation of the error.
+    const detail = (error as any).detail || error.toString();
+    const message = error.message || 'Internal Server Error';
+
     return res.status(500).json({ 
-      error: msg,
-      detail: error.toString() 
+      error: message,
+      detail: detail 
     });
   }
 }

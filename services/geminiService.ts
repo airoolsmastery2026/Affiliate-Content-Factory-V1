@@ -39,9 +39,18 @@ export const analyzeContent = async (
     // Clean up any potential markdown formatting in the JSON response
     const cleanedText = text.replace(/^```json\s*/, '').replace(/\s*```$/, '');
     
-    return JSON.parse(cleanedText) as AnalysisResult;
+    try {
+      return JSON.parse(cleanedText) as AnalysisResult;
+    } catch (parseError) {
+      // Attach raw text to error for debugging in API response
+      const error = new Error("Gemini JSON Parsing Failed");
+      (error as any).detail = cleanedText;
+      throw error;
+    }
   } catch (error: any) {
     console.error("Gemini Analysis Error:", error);
+    // If it's our custom parsing error, rethrow it
+    if (error.message === "Gemini JSON Parsing Failed") throw error;
     throw new Error(`Gemini Analysis Failed: ${error.message}`);
   }
 };
