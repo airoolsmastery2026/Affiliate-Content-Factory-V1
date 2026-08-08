@@ -21,30 +21,48 @@ const ScriptResultView: React.FC<ScriptResultProps> = ({ result }) => {
     setTimeout(() => setCopiedPrompt(false), 2000);
   };
 
+  const buildPayload = () => ({
+    sourceApp: 'affiliate-content-factory',
+    content: {
+      title: currentScript?.title,
+      script: currentScript?.script,
+      caption: currentScript?.caption,
+      hashtags: currentScript?.hashtags,
+      platforms: [result.platform],
+    },
+    platforms: [result.platform],
+  });
+
   const sendToVideoStudio = async () => {
     if (!currentScript) return;
     setHandoffStatus('Đang gửi sang Video Studio...');
+    const payload = buildPayload();
+
     try {
       const response = await fetch(`${VIDEO_STUDIO_URL}/api/niche/render`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          sourceApp: 'affiliate-content-factory',
-          content: {
-            title: currentScript.title,
-            script: currentScript.script,
-            caption: currentScript.caption,
-            hashtags: currentScript.hashtags,
-            platforms: [result.platform],
-          },
-          platforms: [result.platform],
-        }),
+        body: JSON.stringify(payload),
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || 'Video Studio không nhận được dữ liệu');
-      setHandoffStatus(`Đã chuyển sang Video Studio · Job ${data.id}`);
+      setHandoffStatus(`Đã chuyển sang Video Studio local · Job ${data.id}`);
+      return;
+    } catch (_) {
+      // Cloud/Vercel fallback: validate and stage the job even when the local FFmpeg worker is offline.
+    }
+
+    try {
+      const response = await fetch('/api/video-handoff', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || 'Cloud preview không nhận được dữ liệu');
+      setHandoffStatus(`Cloud Preview OK · Job ${data.id} · Sẵn sàng chuyển cho worker local`);
     } catch (error: any) {
-      setHandoffStatus('Không kết nối được Video Studio local. Hãy mở DHP Video Studio v0.3 trước.');
+      setHandoffStatus(`Handoff thất bại: ${error?.message || 'không xác định'}`);
     }
   };
 
