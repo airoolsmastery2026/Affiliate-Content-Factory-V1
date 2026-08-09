@@ -1,0 +1,13 @@
+{
+  "maxVideosPerDay": 5,
+  "maxRenderRetries": 3,
+  "maxAssetRegenerations": 2,
+  "minViralScoreToRender": 65,
+  "minQaScoreToPublish": 80,
+  "autopublish": false,
+  "earlyExit": {
+    "onMissingRequiredInput": true,
+    "onLowViralScore": true,
+    "onRetryBudgetExhausted": true
+  }
+}
