@@ -1,0 +1,32 @@
+version: 1
+loop: autonomous-video
+
+gates:
+  render:
+    require:
+      - title
+      - script
+      - platform
+    min_script_chars: 50
+    min_viral_score: 65
+    max_render_retries: 3
+
+  publish:
+    require:
+      - rendered_video
+      - caption
+      - platform
+    min_qa_score: 80
+    autopublish: false
+
+circuit_breaker:
+  on_render_retry_exhausted: needs_review
+  on_repeated_qa_failure: needs_review
+
+ownership:
+  market: research_agent
+  content: viral_strategy_agent
+  production: video_director
+  verification: video_qa_agent
+  publishing: publisher
+  learning: analytics_agent
