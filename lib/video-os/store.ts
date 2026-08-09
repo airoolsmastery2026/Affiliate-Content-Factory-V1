@@ -1,25 +1,60 @@
-const SUPABASE_URL = process.env.VIDEO_OS_SUPABASE_URL || 'https://arzoyejaiuglmsyjjymu.supabase.co';
-const SUPABASE_KEY = process.env.VIDEO_OS_SUPABASE_PUBLISHABLE_KEY || 'sb_publishable_msXKIm4uGP3a7hwBhctx7Q_soyFaKe1';
+const VIDEO_OS_BRIDGE_URL = (
+  process.env.VIDEO_OS_BRIDGE_URL ||
+  'https://arzoyejaiuglmsyjjymu.supabase.co/functions/v1/dhp-video-os-bridge'
+).replace(/\/$/, '');
 
-async function rpc<T>(name: string, body: Record<string, unknown>): Promise<T> {
-  const response = await fetch(`${SUPABASE_URL}/rest/v1/rpc/${name}`, {
-    method: 'POST',
-    headers: {
-      apikey: SUPABASE_KEY,
-      Authorization: `Bearer ${SUPABASE_KEY}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(body),
+function bridgeHeaders(workerToken?: string): Record<string, string> {
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+
+  if (workerToken) {
+    headers['x-video-worker-token'] = workerToken;
+    return headers;
+  }
+
+  const oidcToken = process.env.VERCEL_OIDC_TOKEN?.trim();
+  if (oidcToken) {
+    headers.Authorization = `Bearer ${oidcToken}`;
+    return headers;
+  }
+
+  const dhpKey = process.env.VIDEO_OS_DHP_KEY?.trim();
+  if (dhpKey) {
+    headers.Authorization = dhpKey.startsWith('DHP-Key ') ? dhpKey : `DHP-Key ${dhpKey}`;
+    return headers;
+  }
+
+  throw new Error('Video OS bridge credentials are unavailable. Enable Vercel OIDC or configure VIDEO_OS_DHP_KEY.');
+}
+
+async function bridgeRequest<T>(
+  path: string,
+  options: {
+    method?: 'GET' | 'POST';
+    body?: Record<string, unknown>;
+    workerToken?: string;
+  } = {},
+): Promise<T | null> {
+  const response = await fetch(`${VIDEO_OS_BRIDGE_URL}${path}`, {
+    method: options.method || 'GET',
+    headers: bridgeHeaders(options.workerToken),
+    ...(options.body ? { body: JSON.stringify(options.body) } : {}),
   });
 
+  if (response.status === 204) return null;
+
   const text = await response.text();
-  let data: any = null;
-  try { data = text ? JSON.parse(text) : null; } catch { data = text; }
+  let payload: any = null;
+  try { payload = text ? JSON.parse(text) : null; } catch { payload = text; }
+
   if (!response.ok) {
-    const message = data?.message || data?.error || text || `Supabase RPC ${name} failed`;
+    const message = payload?.error || payload?.message || text || `Video OS bridge failed with HTTP ${response.status}`;
     throw new Error(message);
   }
-  return data as T;
+
+  if (payload && typeof payload === 'object' && !Array.isArray(payload) && 'data' in payload) {
+    return payload.data as T;
+  }
+  return payload as T;
 }
 
 export interface EnqueueInput {
@@ -31,27 +66,32 @@ export interface EnqueueInput {
 }
 
 export async function enqueueVideoJob(input: EnqueueInput) {
-  const rows = await rpc<any[]>('video_os_enqueue', {
-    p_source_app: input.sourceApp,
-    p_content: input.content,
-    p_platforms: input.platforms,
-    p_viral_score: input.viralScore ?? null,
-    p_render_attempts: input.renderAttempts ?? 0,
+  return bridgeRequest<any>('/v1/video-os/jobs', {
+    method: 'POST',
+    body: {
+      content: {
+        ...input.content,
+        sourceApp: input.sourceApp,
+      },
+      platforms: input.platforms,
+      viralScore: input.viralScore ?? null,
+      renderAttempts: input.renderAttempts ?? 0,
+    },
   });
-  return rows?.[0] || null;
 }
 
 export async function getVideoJob(id: string, accessToken: string) {
-  const rows = await rpc<any[]>('video_os_get_job', {
-    p_job_id: id,
-    p_access_token: accessToken,
-  });
-  return rows?.[0] || null;
+  return bridgeRequest<any>(
+    `/v1/video-os/jobs/${encodeURIComponent(id)}?token=${encodeURIComponent(accessToken)}`,
+  );
 }
 
 export async function claimVideoJob(workerToken: string) {
-  const rows = await rpc<any[]>('video_os_claim', { p_worker_token: workerToken });
-  return rows?.[0] || null;
+  return bridgeRequest<any>('/v1/video-os/claim', {
+    method: 'POST',
+    body: {},
+    workerToken,
+  });
 }
 
 export interface ReportInput {
@@ -65,16 +105,18 @@ export interface ReportInput {
 }
 
 export async function reportVideoJob(input: ReportInput) {
-  const rows = await rpc<any[]>('video_os_report', {
-    p_worker_token: input.workerToken,
-    p_job_id: input.jobId,
-    p_lock_token: input.lockToken,
-    p_outcome: input.outcome,
-    p_result: input.result ?? null,
-    p_error: input.error ?? null,
-    p_qa_score: input.qaScore ?? null,
+  return bridgeRequest<any>('/v1/video-os/report', {
+    method: 'POST',
+    workerToken: input.workerToken,
+    body: {
+      jobId: input.jobId,
+      lockToken: input.lockToken,
+      outcome: input.outcome,
+      result: input.result ?? null,
+      error: input.error ?? null,
+      qaScore: input.qaScore ?? null,
+    },
   });
-  return rows?.[0] || null;
 }
 
 export interface MarkPublishedInput {
@@ -86,14 +128,15 @@ export interface MarkPublishedInput {
 }
 
 export async function markVideoPublished(input: MarkPublishedInput) {
-  const rows = await rpc<any[]>('video_os_mark_published', {
-    p_job_id: input.jobId,
-    p_access_token: input.accessToken,
-    p_platform: input.platform,
-    p_external_id: input.externalId ?? '',
-    p_external_url: input.externalUrl ?? '',
+  return bridgeRequest<any>(`/v1/video-os/jobs/${encodeURIComponent(input.jobId)}/published`, {
+    method: 'POST',
+    body: {
+      accessToken: input.accessToken,
+      platform: input.platform,
+      externalId: input.externalId ?? '',
+      externalUrl: input.externalUrl ?? '',
+    },
   });
-  return rows?.[0] || null;
 }
 
 export interface RecordMetricsInput {
@@ -104,11 +147,12 @@ export interface RecordMetricsInput {
 }
 
 export async function recordVideoMetrics(input: RecordMetricsInput) {
-  const rows = await rpc<any[]>('video_os_record_metrics', {
-    p_job_id: input.jobId,
-    p_access_token: input.accessToken,
-    p_platform: input.platform,
-    p_metrics: input.metrics,
+  return bridgeRequest<any>(`/v1/video-os/jobs/${encodeURIComponent(input.jobId)}/metrics`, {
+    method: 'POST',
+    body: {
+      accessToken: input.accessToken,
+      platform: input.platform,
+      metrics: input.metrics,
+    },
   });
-  return rows?.[0] || null;
 }
