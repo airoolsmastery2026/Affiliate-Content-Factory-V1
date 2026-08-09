@@ -76,3 +76,39 @@ export async function reportVideoJob(input: ReportInput) {
   });
   return rows?.[0] || null;
 }
+
+export interface MarkPublishedInput {
+  jobId: string;
+  accessToken: string;
+  platform: string;
+  externalId?: string | null;
+  externalUrl?: string | null;
+}
+
+export async function markVideoPublished(input: MarkPublishedInput) {
+  const rows = await rpc<any[]>('video_os_mark_published', {
+    p_job_id: input.jobId,
+    p_access_token: input.accessToken,
+    p_platform: input.platform,
+    p_external_id: input.externalId ?? '',
+    p_external_url: input.externalUrl ?? '',
+  });
+  return rows?.[0] || null;
+}
+
+export interface RecordMetricsInput {
+  jobId: string;
+  accessToken: string;
+  platform: string;
+  metrics: Record<string, unknown>;
+}
+
+export async function recordVideoMetrics(input: RecordMetricsInput) {
+  const rows = await rpc<any[]>('video_os_record_metrics', {
+    p_job_id: input.jobId,
+    p_access_token: input.accessToken,
+    p_platform: input.platform,
+    p_metrics: input.metrics,
+  });
+  return rows?.[0] || null;
+}

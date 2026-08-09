@@ -17,6 +17,23 @@ type VideoJob = {
   error?: string | null;
 };
 
+const BOT_DANG_BAI_URL = 'https://bot-dang-bai-nguyen-huu-huongs-projects-5a8e872f.vercel.app';
+
+function encodeBase64Url(value: unknown) {
+  const bytes = new TextEncoder().encode(JSON.stringify(value));
+  let binary = '';
+  bytes.forEach((byte) => { binary += String.fromCharCode(byte); });
+  return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '');
+}
+
+function normalizePublisherPlatform(value: string) {
+  const platform = String(value || '').trim().toLowerCase();
+  if (platform.includes('tiktok')) return 'tiktok';
+  if (platform.includes('instagram') || platform.includes('reels')) return 'instagram';
+  if (platform.includes('facebook')) return 'facebook';
+  return platform;
+}
+
 const ScriptResultView: React.FC<ScriptResultProps> = ({ result }) => {
   const [activeVariant, setActiveVariant] = useState(0);
   const [copiedPrompt, setCopiedPrompt] = useState(false);
@@ -107,6 +124,24 @@ const ScriptResultView: React.FC<ScriptResultProps> = ({ result }) => {
     return () => window.clearInterval(timer);
   }, [videoJob?.id, videoJob?.accessToken, videoJob?.status]);
 
+  const publisherUrl = (() => {
+    if (!videoJob?.id || !videoJob.accessToken || videoJob.status !== 'qa_passed' || !videoJob.result?.videoUrl || !currentScript) return null;
+    const platform = normalizePublisherPlatform(result.platform);
+    if (!['facebook', 'instagram', 'tiktok'].includes(platform)) return null;
+    const hashtags = currentScript.hashtags.map((tag) => tag.startsWith('#') ? tag : `#${tag}`).join(' ');
+    const payload = {
+      campaignId: videoJob.id,
+      sourceJobId: videoJob.id,
+      sourceAccessToken: videoJob.accessToken,
+      sourceCallbackUrl: `${window.location.origin}/api/video-jobs/published`,
+      topic: currentScript.title,
+      content: `${currentScript.caption}${hashtags ? `\n\n${hashtags}` : ''}`,
+      platforms: [platform],
+      videoUrl: videoJob.result.videoUrl,
+    };
+    return `${BOT_DANG_BAI_URL}/#/scheduler?videoos=${encodeBase64Url(payload)}`;
+  })();
+
   if (!currentScript) return null;
 
   return (
@@ -122,9 +157,7 @@ const ScriptResultView: React.FC<ScriptResultProps> = ({ result }) => {
               Variant {idx + 1}
             </button>
           ))}
-          <button onClick={queueVideo} className="px-4 py-1.5 rounded-full text-xs font-bold bg-emerald-600 text-white hover:bg-emerald-500 transition-colors">
-            Tạo video →
-          </button>
+          <button onClick={queueVideo} className="px-4 py-1.5 rounded-full text-xs font-bold bg-emerald-600 text-white hover:bg-emerald-500 transition-colors">Tạo video →</button>
         </div>
       </div>
 
@@ -139,9 +172,8 @@ const ScriptResultView: React.FC<ScriptResultProps> = ({ result }) => {
             <Metric label="QA Score" value={videoJob.qaScore ?? videoJob.result?.qa?.score ?? '—'} />
             <Metric label="Lần render" value={videoJob.attempts ?? 0} />
             {videoJob.error && <div className="col-span-2 md:col-span-5 text-sm text-red-300 bg-red-950/30 border border-red-500/30 rounded-lg p-3">{videoJob.error}</div>}
-            {videoJob.result?.videoUrl && (
-              <a className="col-span-2 md:col-span-5 text-sm text-emerald-300 underline" href={videoJob.result.videoUrl} target="_blank" rel="noreferrer">Mở video đã render</a>
-            )}
+            {videoJob.result?.videoUrl && <a className="col-span-2 md:col-span-5 text-sm text-emerald-300 underline" href={videoJob.result.videoUrl} target="_blank" rel="noreferrer">Mở video đã render</a>}
+            {publisherUrl && <a className="col-span-2 md:col-span-5 rounded-lg bg-blue-600 px-4 py-3 text-center text-sm font-bold text-white hover:bg-blue-500" href={publisherUrl}>QA đạt chuẩn · Chuyển sang BOT ĐĂNG BÀI →</a>}
           </div>
         )}
 
@@ -152,27 +184,15 @@ const ScriptResultView: React.FC<ScriptResultProps> = ({ result }) => {
 
         <div className="grid lg:grid-cols-3 gap-8">
           <div className="lg:col-span-2 space-y-8">
-            <div>
-              <h4 className="text-gray-500 text-[10px] font-bold uppercase tracking-widest mb-3">Script & Direction</h4>
-              <div className="bg-gray-900/80 p-5 rounded-lg text-gray-300 font-mono text-sm whitespace-pre-wrap leading-relaxed border border-gray-700/50 shadow-inner">{currentScript.script}</div>
-            </div>
+            <div><h4 className="text-gray-500 text-[10px] font-bold uppercase tracking-widest mb-3">Script & Direction</h4><div className="bg-gray-900/80 p-5 rounded-lg text-gray-300 font-mono text-sm whitespace-pre-wrap leading-relaxed border border-gray-700/50 shadow-inner">{currentScript.script}</div></div>
             <div className="bg-gradient-to-br from-indigo-950/40 to-purple-950/40 border border-indigo-500/20 rounded-xl p-6 relative overflow-hidden group">
               <h4 className="text-indigo-400 text-xs font-bold uppercase tracking-widest mb-4 flex items-center"><span className="text-lg mr-2">🎨</span> Visual Engine (AI Prompts)</h4>
               <div className="grid md:grid-cols-2 gap-6 relative z-10">
-                <div>
-                  <p className="text-[10px] text-indigo-300 uppercase font-bold mb-2 tracking-wide">Thumbnail Concept</p>
-                  <p className="text-sm text-gray-300 bg-gray-900/50 p-3 rounded border border-gray-700/30">{currentScript.visual_ideas?.thumbnail_description || 'N/A'}</p>
-                </div>
-                <div>
-                  <div className="flex justify-between items-center mb-2"><p className="text-[10px] text-purple-300 uppercase font-bold tracking-wide">AI Image Prompt</p>{copiedPrompt && <span className="text-[10px] text-green-400 font-bold">Copied!</span>}</div>
-                  <div className="bg-black/40 p-3 rounded border border-purple-500/30 hover:border-purple-500/60 cursor-pointer" onClick={() => currentScript.visual_ideas?.ai_image_prompt && handleCopyPrompt(currentScript.visual_ideas.ai_image_prompt)}>
-                    <code className="text-xs text-purple-200 break-words block font-mono leading-relaxed">{currentScript.visual_ideas?.ai_image_prompt || 'N/A'}</code>
-                  </div>
-                </div>
+                <div><p className="text-[10px] text-indigo-300 uppercase font-bold mb-2 tracking-wide">Thumbnail Concept</p><p className="text-sm text-gray-300 bg-gray-900/50 p-3 rounded border border-gray-700/30">{currentScript.visual_ideas?.thumbnail_description || 'N/A'}</p></div>
+                <div><div className="flex justify-between items-center mb-2"><p className="text-[10px] text-purple-300 uppercase font-bold tracking-wide">AI Image Prompt</p>{copiedPrompt && <span className="text-[10px] text-green-400 font-bold">Copied!</span>}</div><div className="bg-black/40 p-3 rounded border border-purple-500/30 hover:border-purple-500/60 cursor-pointer" onClick={() => currentScript.visual_ideas?.ai_image_prompt && handleCopyPrompt(currentScript.visual_ideas.ai_image_prompt)}><code className="text-xs text-purple-200 break-words block font-mono leading-relaxed">{currentScript.visual_ideas?.ai_image_prompt || 'N/A'}</code></div></div>
               </div>
             </div>
           </div>
-
           <div className="space-y-6">
             <div><h4 className="text-gray-500 text-[10px] font-bold uppercase tracking-widest mb-2">Social Caption</h4><div className="bg-gray-900 p-4 rounded-lg text-gray-300 text-sm border border-gray-700">{currentScript.caption}</div></div>
             <div><h4 className="text-gray-500 text-[10px] font-bold uppercase tracking-widest mb-2">Hashtags</h4><div className="flex flex-wrap gap-2">{currentScript.hashtags.map((tag, i) => <span key={i} className="text-blue-400 bg-blue-900/20 px-2.5 py-1 rounded text-xs border border-blue-500/20">{tag.startsWith('#') ? tag : `#${tag}`}</span>)}</div></div>
